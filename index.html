@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tablero de Tiempos — Taller HDC</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<style>
+  :root{
+    --navy:#0F2A4A;
+    --navy2:#173A63;
+    --steel:#2E75B6;
+    --steel-light:#5B9BD5;
+    --amber:#D98A2B;
+    --bg:#EEF2F6;
+    --card:#FFFFFF;
+    --ink:#16232F;
+    --ink-soft:#5B6B7A;
+    --line:#D8E0E8;
+    --good:#2F8F5B;
+    --warn:#D9822B;
+    --bad:#C0392B;
+    font-family:'Segoe UI',Arial,sans-serif;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--ink);}
+  header{
+    background:linear-gradient(120deg,var(--navy) 0%,var(--navy2) 55%,var(--steel) 130%);
+    color:#fff;padding:28px 32px 22px;position:relative;overflow:hidden;
+  }
+  header::after{
+    content:"";position:absolute;right:-60px;top:-60px;width:260px;height:260px;
+    border-radius:50%;background:rgba(255,255,255,0.06);
+  }
+  header h1{margin:0 0 4px;font-size:1.6rem;letter-spacing:.3px;}
+  header p{margin:0;color:#C9D8E8;font-size:.85rem;}
+  .status-bar{
+    display:flex;align-items:center;gap:14px;margin-top:14px;flex-wrap:wrap;font-size:.78rem;color:#DCE8F5;
+  }
+  .dot{width:9px;height:9px;border-radius:50%;background:#8fe0a8;display:inline-block;box-shadow:0 0 0 3px rgba(143,224,168,.25);}
+  .dot.stale{background:#e0c98f;box-shadow:0 0 0 3px rgba(224,201,143,.25);}
+  .dot.err{background:#e08f8f;box-shadow:0 0 0 3px rgba(224,143,143,.25);}
+  button.refresh{
+    background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.35);color:#fff;
+    padding:5px 12px;border-radius:20px;font-size:.75rem;cursor:pointer;transition:.15s;
+  }
+  button.refresh:hover{background:rgba(255,255,255,.22);}
+  main{max-width:1360px;margin:0 auto;padding:24px 32px 60px;}
+
+  .kpi-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:14px;margin-bottom:26px;}
+  @media (max-width:1100px){.kpi-grid{grid-template-columns:repeat(3,1fr);}}
+  @media (max-width:640px){.kpi-grid{grid-template-columns:repeat(2,1fr);}}
+  .kpi{
+    background:var(--card);border-radius:10px;padding:16px 14px;border:1px solid var(--line);
+    box-shadow:0 1px 3px rgba(15,42,74,.06);position:relative;overflow:hidden;
+  }
+  .kpi::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--steel);}
+  .kpi.total::before{background:var(--amber);}
+  .kpi .lab{font-size:.66rem;text-transform:uppercase;letter-spacing:.5px;color:var(--ink-soft);font-weight:600;min-height:28px;}
+  .kpi .val{font-size:1.7rem;font-weight:700;color:var(--navy);margin:4px 0 2px;}
+  .kpi .sub{font-size:.68rem;color:var(--ink-soft);}
+
+  section{background:var(--card);border-radius:12px;border:1px solid var(--line);padding:20px 22px;margin-bottom:22px;box-shadow:0 1px 3px rgba(15,42,74,.05);}
+  section h2{margin:0 0 4px;font-size:1.02rem;color:var(--navy);}
+  section .desc{font-size:.78rem;color:var(--ink-soft);margin:0 0 16px;}
+
+  .grid2{display:grid;grid-template-columns:1.1fr .9fr;gap:20px;}
+  @media (max-width:960px){.grid2{grid-template-columns:1fr;}}
+  .chart-wrap{position:relative;height:300px;}
+
+  table{width:100%;border-collapse:collapse;font-size:.8rem;}
+  thead th{
+    background:var(--navy);color:#fff;text-align:left;padding:9px 10px;font-weight:600;
+    position:sticky;top:0;font-size:.72rem;text-transform:uppercase;letter-spacing:.3px;
+  }
+  tbody td{padding:8px 10px;border-bottom:1px solid var(--line);}
+  tbody tr:nth-child(even){background:#F7FAFD;}
+  tbody tr:hover{background:#EAF2FA;}
+  .table-scroll{max-height:460px;overflow:auto;border:1px solid var(--line);border-radius:8px;}
+  .toolbar{display:flex;gap:10px;align-items:center;margin-bottom:14px;flex-wrap:wrap;}
+  .toolbar input[type=text]{
+    padding:7px 12px;border:1px solid var(--line);border-radius:20px;font-size:.8rem;min-width:220px;
+  }
+  .pill{background:#EEF2F6;color:var(--ink-soft);border-radius:20px;padding:5px 12px;font-size:.72rem;font-weight:600;}
+  .badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:.68rem;font-weight:700;color:#fff;}
+  .badge.good{background:var(--good);}
+  .badge.warn{background:var(--warn);}
+  .badge.bad{background:var(--bad);}
+
+  #configPanel{display:none;}
+  #configPanel.open{display:block;}
+  .cfg-row{display:flex;align-items:center;gap:10px;margin-bottom:8px;font-size:.8rem;}
+  .cfg-row label{width:230px;color:var(--ink-soft);}
+  .cfg-row input{flex:1;padding:6px 10px;border:1px solid var(--line);border-radius:6px;font-size:.8rem;}
+  .cfg-actions{margin-top:12px;display:flex;gap:10px;}
+  .btn{
+    background:var(--steel);color:#fff;border:none;padding:8px 16px;border-radius:6px;font-size:.8rem;
+    cursor:pointer;font-weight:600;
+  }
+  .btn.secondary{background:transparent;color:var(--steel);border:1px solid var(--steel);}
+  .hint{font-size:.72rem;color:var(--ink-soft);line-height:1.5;margin-top:8px;}
+  .hint code{background:#EEF2F6;padding:1px 5px;border-radius:4px;}
+  .empty{padding:40px;text-align:center;color:var(--ink-soft);font-size:.85rem;}
+  footer{text-align:center;color:#8494A2;font-size:.72rem;padding:20px;}
+  a.link{color:var(--steel);text-decoration:none;}
+  a.link:hover{text-decoration:underline;}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Tablero de Tiempos — Taller HDC</h1>
+  <p>Etapas del proceso: Ingreso → Desarme → Confirmación → Armado → Prueba OK → Entrega</p>
+  <div class="status-bar">
+    <span><span class="dot" id="statusDot"></span> <span id="statusText">Cargando datos…</span></span>
+    <span class="pill" id="lastUpdate">—</span>
+    <button class="refresh" onclick="loadAll(true)">↻ Actualizar ahora</button>
+    <button class="refresh" onclick="toggleConfig()">⚙ Configurar hojas</button>
+  </div>
+</header>
+
+<main>
+
+  <section id="configPanel">
+    <h2>Configuración de la fuente de datos</h2>
+    <p class="desc">
+      Esta página lee directamente el Google Sheet publicado. Cada pestaña del Sheet tiene un identificador
+      (<b>gid</b>) distinto. Abrí el Sheet original, hacé clic en cada pestaña de abajo y copiá el número que
+      aparece después de <code>gid=</code> en la barra de direcciones. Pegalo acá una sola vez — el navegador
+      lo va a recordar en la URL de esta página.
+    </p>
+    <div class="cfg-row"><label>FICHA DE INGRESO (gid)</label><input id="cfg_ingreso" placeholder="ej: 0"></div>
+    <div class="cfg-row"><label>REGISTRO DE DESARME (gid)</label><input id="cfg_desarme" placeholder="ej: 123456789"></div>
+    <div class="cfg-row"><label>CONFIRMACION DE CLIENTE (gid)</label><input id="cfg_confirm" placeholder="ej: 123456789"></div>
+    <div class="cfg-row"><label>REGISTRO DE ARMADO (gid)</label><input id="cfg_armado" placeholder="ej: 123456789"></div>
+    <div class="cfg-row"><label>REGISTRO DE PRUEBA (gid)</label><input id="cfg_prueba" placeholder="ej: 123456789"></div>
+    <div class="cfg-row"><label>REGISTRO DE ENTREGA (gid)</label><input id="cfg_entrega" placeholder="ej: 123456789"></div>
+    <div class="cfg-actions">
+      <button class="btn" onclick="saveConfig()">Guardar y cargar</button>
+      <button class="btn secondary" onclick="toggleConfig()">Cerrar</button>
+    </div>
+    <p class="hint">
+      Tip: el link publicado que nos pasaste apunta a <code>.../pubhtml</code>. Al hacer clic en una pestaña dentro
+      de esa vista publicada, la URL cambia a algo como <code>...pubhtml#gid=987654321</code>. Ese número es el
+      que va en cada campo. También podés armar la URL como parámetro, ej:
+      <code>dashboard.html?ingreso=0&desarme=111&confirm=222&armado=333&prueba=444&entrega=555</code>
+    </p>
+  </section>
+
+  <div class="kpi-grid" id="kpiGrid">
+    <!-- KPI cards injected by JS -->
+  </div>
+
+  <section>
+    <div class="grid2">
+      <div>
+        <h2>Promedio de días por etapa</h2>
+        <p class="desc">Días corridos promedio entre el registro de una etapa y la siguiente.</p>
+        <div class="chart-wrap"><canvas id="barStages"></canvas></div>
+      </div>
+      <div>
+        <h2>Distribución del tiempo total</h2>
+        <p class="desc">Ingreso → Entrega, por rango de días.</p>
+        <div class="chart-wrap"><canvas id="donutTotal"></canvas></div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Tendencia mensual</h2>
+    <p class="desc">Evolución del tiempo total promedio (línea) y volumen de fichas ingresadas (barras), por mes de ingreso.</p>
+    <div class="chart-wrap" style="height:340px;"><canvas id="lineMonthly"></canvas></div>
+  </section>
+
+  <section>
+    <h2>Detalle por ficha</h2>
+    <p class="desc">Fechas de cada etapa y días transcurridos. Se actualiza junto con el resto del tablero.</p>
+    <div class="toolbar">
+      <input type="text" id="searchBox" placeholder="Buscar N° de ficha…" oninput="renderTable()">
+      <span class="pill" id="rowCount">0 fichas</span>
+    </div>
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>N° Ficha</th><th>Ingreso</th><th>Desarme</th><th>Confirmación</th><th>Armado</th><th>Prueba OK</th><th>Entrega</th><th>Total (días)</th>
+          </tr>
+        </thead>
+        <tbody id="tableBody"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <footer>
+    Datos leídos en vivo desde Google Sheets · Actualización automática cada 5 minutos ·
+    <a class="link" href="https://docs.google.com/spreadsheets/d/e/2PACX-1vREZwLQ55f-p1OoNtuD_IJe8FUFwcosDSeQmgR4otxz1xEpEC7m8jUfgyxtGsDTiz3vu4GfCiJt8MVk/pubhtml" target="_blank">Ver planilla original</a>
+  </footer>
+
+</main>
+
+<script>
+const PUB_KEY = "2PACX-1vREZwLQ55f-p1OoNtuD_IJe8FUFwcosDSeQmgR4otxz1xEpEC7m8jUfgyxtGsDTiz3vu4GfCiJt8MVk";
+const REFRESH_MS = 5 * 60 * 1000; // 5 minutos
+
+// ---------- Config (gids) — leídos de la URL, con defaults editables desde el panel ----------
+function paramsFromUrl(){
+  const p = new URLSearchParams(location.search);
+  return {
+    ingreso: p.get('ingreso') || '0',
+    desarme: p.get('desarme') || '',
+    confirm: p.get('confirm') || '',
+    armado:  p.get('armado')  || '',
+    prueba:  p.get('prueba')  || '',
+    entrega: p.get('entrega') || ''
+  };
+}
+let CFG = paramsFromUrl();
+
+function toggleConfig(){
+  document.getElementById('configPanel').classList.toggle('open');
+  document.getElementById('cfg_ingreso').value = CFG.ingreso;
+  document.getElementById('cfg_desarme').value = CFG.desarme;
+  document.getElementById('cfg_confirm').value = CFG.confirm;
+  document.getElementById('cfg_armado').value  = CFG.armado;
+  document.getElementById('cfg_prueba').value  = CFG.prueba;
+  document.getElementById('cfg_entrega').value = CFG.entrega;
+}
+function saveConfig(){
+  CFG = {
+    ingreso: document.getElementById('cfg_ingreso').value.trim() || '0',
+    desarme: document.getElementById('cfg_desarme').value.trim(),
+    confirm: document.getElementById('cfg_confirm').value.trim(),
+    armado:  document.getElementById('cfg_armado').value.trim(),
+    prueba:  document.getElementById('cfg_prueba').value.trim(),
+    entrega: document.getElementById('cfg_entrega').value.trim(),
+  };
+  const p = new URLSearchParams(CFG);
+  history.replaceState(null, '', location.pathname + '?' + p.toString());
+  toggleConfig();
+  loadAll(true);
+}
+
+function csvUrl(gid){
+  return `https://docs.google.com/spreadsheets/d/e/${PUB_KEY}/pub?gid=${gid}&single=true&output=csv&cachebust=${Date.now()}`;
+}
+
+// ---------- CSV parser (handles quoted fields, commas, newlines) ----------
+function parseCSV(text){
+  const rows = [];
+  let row = [], field = '', inQuotes = false;
+  for (let i=0; i<text.length; i++){
+    const c = text[i], n = text[i+1];
+    if (inQuotes){
+      if (c === '"' && n === '"'){ field += '"'; i++; }
+      else if (c === '"'){ inQuotes = false; }
+      else { field += c; }
+    } else {
+      if (c === '"'){ inQuotes = true; }
+      else if (c === ','){ row.push(field); field=''; }
+      else if (c === '\n'){ row.push(field); rows.push(row); row=[]; field=''; }
+      else if (c === '\r'){ /* skip */ }
+      else { field += c; }
+    }
+  }
+  if (field.length || row.length){ row.push(field); rows.push(row); }
+  return rows;
+}
+
+async function fetchSheet(gid){
+  if (!gid) return null;
+  try{
+    const res = await fetch(csvUrl(gid), {cache:'no-store'});
+    if (!res.ok) throw new Error('HTTP '+res.status);
+    const text = await res.text();
+    const rows = parseCSV(text);
+    if (!rows.length) return null;
+    const headers = rows[0].map(h => h.trim());
+    return rows.slice(1).filter(r => r.some(v => v && v.trim()!== '')).map(r => {
+      const obj = {};
+      headers.forEach((h,i) => obj[h] = (r[i]||'').trim());
+      return obj;
+    });
+  } catch(e){
+    console.error('Error leyendo hoja gid='+gid, e);
+    return null;
+  }
+}
+
+function findCol(row, candidates){
+  const keys = Object.keys(row);
+  for (const c of candidates){
+    const hit = keys.find(k => k.toLowerCase().replace(/\s+/g,' ').trim() === c.toLowerCase());
+    if (hit) return hit;
+  }
+  // fallback: partial match
+  for (const c of candidates){
+    const hit = keys.find(k => k.toLowerCase().includes(c.toLowerCase()));
+    if (hit) return hit;
+  }
+  return null;
+}
+
+function parseDate(v){
+  if (!v) return null;
+  v = v.trim();
+  if (!v) return null;
+  // Google CSV export gives dates like "9/2/2024 12:00:12" or "2024-09-02 12:00:12"
+  let d = new Date(v);
+  if (!isNaN(d.getTime())) return d;
+  // try dd/mm/yyyy
+  const m = v.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?/);
+  if (m){
+    d = new Date(+m[3], +m[1]-1, +m[2], +(m[4]||0), +(m[5]||0), +(m[6]||0));
+    if (!isNaN(d.getTime())) return d;
+  }
+  return null;
+}
+
+function minByFicha(rows, fichaCol, dateCol, filterFn){
+  const map = {};
+  if (!rows) return map;
+  rows.forEach(r => {
+    if (filterFn && !filterFn(r)) return;
+    const fRaw = r[fichaCol];
+    const f = parseInt(String(fRaw).replace(/\D/g,''));
+    if (!f || isNaN(f)) return;
+    const d = parseDate(r[dateCol]);
+    if (!d) return;
+    if (!map[f] || d < map[f]) map[f] = d;
+  });
+  return map;
+}
+
+function daysBetween(a,b){
+  if (!a || !b) return null;
+  const diff = (b - a) / 86400000;
+  if (diff < 0 || diff > 365) return null;
+  return diff;
+}
+function fmtDate(d){
+  if (!d) return '—';
+  return d.toLocaleDateString('es-AR', {day:'2-digit',month:'2-digit',year:'numeric'}) + ' ' +
+         d.toLocaleTimeString('es-AR', {hour:'2-digit',minute:'2-digit'});
+}
+function fmtDays(v){ return (v===null||v===undefined||isNaN(v)) ? '—' : v.toFixed(1); }
+
+let DATASET = []; // per-ficha merged records
+let charts = {};
+
+async function loadAll(manual){
+  setStatus('loading');
+  try{
+    const [ingreso, desarme, confirm, armado, prueba, entrega] = await Promise.all([
+      fetchSheet(CFG.ingreso), fetchSheet(CFG.desarme), fetchSheet(CFG.confirm),
+      fetchSheet(CFG.armado), fetchSheet(CFG.prueba), fetchSheet(CFG.entrega)
+    ]);
+
+    const sheetsLoaded = [ingreso,desarme,confirm,armado,prueba,entrega].filter(x=>x).length;
+    if (sheetsLoaded === 0){
+      setStatus('error', 'No se pudo leer ninguna hoja. Configurá los gid en "⚙ Configurar hojas".');
+      renderEmpty();
+      return;
+    }
+
+    const mIngreso = ingreso ? minByFicha(ingreso, findCol(ingreso[0],['numero de ficha','n de ficha']), findCol(ingreso[0],['marca temporal'])) : {};
+    const mDesarme = desarme ? minByFicha(desarme, findCol(desarme[0],['numero de ficha']), findCol(desarme[0],['marca temporal'])) : {};
+    const mConfirm = confirm ? minByFicha(confirm, findCol(confirm[0],['numero de ficha']), findCol(confirm[0],['marca temporal'])) : {};
+    const mArmado  = armado  ? minByFicha(armado,  findCol(armado[0],['numero de ficha']),  findCol(armado[0],['marca temporal'])) : {};
+    const mPrueba  = prueba  ? minByFicha(prueba,  findCol(prueba[0],['numero de ficha']),  findCol(prueba[0],['marca temporal']),
+                                r => { const ec = findCol(prueba[0],['estado']); return !ec || /ok/i.test(r[ec]||''); }) : {};
+    const mEntrega = entrega ? minByFicha(entrega, findCol(entrega[0],['verificar numero de ficha','numero de ficha']), findCol(entrega[0],['marca temporal'])) : {};
+
+    const fichas = new Set([
+      ...Object.keys(mIngreso), ...Object.keys(mDesarme), ...Object.keys(mConfirm),
+      ...Object.keys(mArmado), ...Object.keys(mPrueba), ...Object.keys(mEntrega)
+    ].map(Number));
+
+    DATASET = [...fichas].filter(f => f >= 9000 && f <= 20000).sort((a,b)=>a-b).map(f => {
+      const di = mIngreso[f], dd = mDesarme[f], dc = mConfirm[f], da = mArmado[f], dp = mPrueba[f], de = mEntrega[f];
+      return {
+        ficha: f, ingreso: di, desarme: dd, confirm: dc, armado: da, prueba: dp, entrega: de,
+        d_ing_des: daysBetween(di,dd),
+        d_des_con: daysBetween(dd,dc),
+        d_con_arm: daysBetween(dc,da),
+        d_arm_pru: daysBetween(da,dp),
+        d_pru_ent: daysBetween(dp,de),
+        d_total:   daysBetween(di,de),
+      };
+    });
+
+    renderKPIs();
+    renderCharts();
+    renderTable();
+
+    const now = new Date();
+    document.getElementById('lastUpdate').textContent = 'Última lectura: ' + now.toLocaleTimeString('es-AR');
+    if (sheetsLoaded < 6){
+      setStatus('stale', `Se leyeron ${sheetsLoaded}/6 hojas. Completá los gid faltantes en "⚙ Configurar hojas" para ver el cuadro completo.`);
+    } else {
+      setStatus('ok', 'Datos al día');
+    }
+  } catch(err){
+    console.error(err);
+    setStatus('error', 'Error al leer la planilla. Reintentando en el próximo ciclo.');
+  }
+}
+
+function setStatus(kind, msg){
+  const dot = document.getElementById('statusDot');
+  const txt = document.getElementById('statusText');
+  dot.className = 'dot' + (kind==='error' ? ' err' : kind==='stale' ? ' stale' : '');
+  if (kind==='loading') txt.textContent = 'Actualizando…';
+  else txt.textContent = msg || 'Datos al día';
+}
+
+function avg(arr){ const v = arr.filter(x=>x!==null && x!==undefined && !isNaN(x)); return v.length ? v.reduce((a,b)=>a+b,0)/v.length : null; }
+function median(arr){
+  const v = arr.filter(x=>x!==null && x!==undefined && !isNaN(x)).sort((a,b)=>a-b);
+  if (!v.length) return null;
+  const mid = Math.floor(v.length/2);
+  return v.length%2 ? v[mid] : (v[mid-1]+v[mid])/2;
+}
+
+const STAGE_DEFS = [
+  {key:'d_ing_des', label:'Ingreso → Desarme'},
+  {key:'d_des_con', label:'Desarme → Confirmación'},
+  {key:'d_con_arm', label:'Confirmación → Armado'},
+  {key:'d_arm_pru', label:'Armado → Prueba OK'},
+  {key:'d_pru_ent', label:'Prueba OK → Entrega'},
+  {key:'d_total',   label:'TOTAL Ingreso → Entrega', total:true},
+];
+
+function renderKPIs(){
+  const grid = document.getElementById('kpiGrid');
+  grid.innerHTML = '';
+  STAGE_DEFS.forEach(sd => {
+    const vals = DATASET.map(d => d[sd.key]);
+    const a = avg(vals), m = median(vals), n = vals.filter(x=>x!==null).length;
+    const div = document.createElement('div');
+    div.className = 'kpi' + (sd.total ? ' total' : '');
+    div.innerHTML = `<div class="lab">${sd.label}</div>
+      <div class="val">${a===null?'s/d':a.toFixed(1)+'d'}</div>
+      <div class="sub">Mediana ${fmtDays(m)} d · N=${n}</div>`;
+    grid.appendChild(div);
+  });
+}
+
+function renderCharts(){
+  // Bar: promedio por etapa
+  const ctxBar = document.getElementById('barStages').getContext('2d');
+  const barData = STAGE_DEFS.map(sd => avg(DATASET.map(d=>d[sd.key])));
+  if (charts.bar) charts.bar.destroy();
+  charts.bar = new Chart(ctxBar, {
+    type:'bar',
+    data:{ labels: STAGE_DEFS.map(s=>s.label), datasets:[{
+      data: barData, backgroundColor: STAGE_DEFS.map(s=>s.total?'#D98A2B':'#2E75B6'), borderRadius:5
+    }]},
+    options:{ plugins:{legend:{display:false}}, scales:{ y:{ title:{display:true,text:'Días'} } } }
+  });
+
+  // Donut: distribución tiempo total
+  const totals = DATASET.map(d=>d.d_total).filter(x=>x!==null);
+  const buckets = [ [0,5,'0–5 días'], [5,15,'5–15 días'], [15,30,'15–30 días'], [30,60,'30–60 días'], [60,Infinity,'+60 días'] ];
+  const counts = buckets.map(([lo,hi]) => totals.filter(t=>t>=lo && t<hi).length);
+  const ctxDonut = document.getElementById('donutTotal').getContext('2d');
+  if (charts.donut) charts.donut.destroy();
+  charts.donut = new Chart(ctxDonut, {
+    type:'doughnut',
+    data:{ labels: buckets.map(b=>b[2]), datasets:[{ data: counts,
+      backgroundColor:['#5B9BD5','#2E75B6','#173A63','#D98A2B','#C0392B'] }] },
+    options:{ plugins:{legend:{position:'bottom', labels:{boxWidth:12,font:{size:10}}}} }
+  });
+
+  // Line+bar: tendencia mensual
+  const byMonth = {};
+  DATASET.forEach(d => {
+    if (!d.ingreso) return;
+    const key = d.ingreso.getFullYear() + '-' + String(d.ingreso.getMonth()+1).padStart(2,'0');
+    byMonth[key] = byMonth[key] || {count:0, totals:[]};
+    byMonth[key].count++;
+    if (d.d_total !== null) byMonth[key].totals.push(d.d_total);
+  });
+  const months = Object.keys(byMonth).sort();
+  const counts2 = months.map(m => byMonth[m].count);
+  const avgs2 = months.map(m => avg(byMonth[m].totals));
+
+  const ctxLine = document.getElementById('lineMonthly').getContext('2d');
+  if (charts.line) charts.line.destroy();
+  charts.line = new Chart(ctxLine, {
+    data:{ labels: months, datasets:[
+      { type:'bar', label:'Fichas ingresadas', data: counts2, backgroundColor:'#B9D3EA', yAxisID:'y1', order:2 },
+      { type:'line', label:'Días TOTAL promedio', data: avgs2, borderColor:'#D98A2B', backgroundColor:'#D98A2B', tension:.3, yAxisID:'y2', order:1 }
+    ]},
+    options:{
+      interaction:{mode:'index', intersect:false},
+      scales:{
+        y1:{ position:'left', title:{display:true,text:'Fichas'} },
+        y2:{ position:'right', title:{display:true,text:'Días promedio'}, grid:{drawOnChartArea:false} }
+      }
+    }
+  });
+}
+
+function renderEmpty(){
+  document.getElementById('kpiGrid').innerHTML = '<div class="empty" style="grid-column:1/-1;">Sin datos disponibles todavía.</div>';
+  document.getElementById('tableBody').innerHTML = '<tr><td colspan="8" class="empty">Sin datos</td></tr>';
+}
+
+function renderTable(){
+  const q = (document.getElementById('searchBox').value||'').trim();
+  const tbody = document.getElementById('tableBody');
+  let rows = DATASET;
+  if (q) rows = rows.filter(d => String(d.ficha).includes(q));
+  document.getElementById('rowCount').textContent = rows.length + ' fichas';
+  const frag = document.createDocumentFragment();
+  rows.slice().reverse().slice(0,300).forEach(d => {
+    const tr = document.createElement('tr');
+    const badge = d.d_total===null ? '' :
+      d.d_total<=15 ? `<span class="badge good">${fmtDays(d.d_total)}</span>` :
+      d.d_total<=45 ? `<span class="badge warn">${fmtDays(d.d_total)}</span>` :
+      `<span class="badge bad">${fmtDays(d.d_total)}</span>`;
+    tr.innerHTML = `<td><b>${d.ficha}</b></td><td>${fmtDate(d.ingreso)}</td><td>${fmtDate(d.desarme)}</td>
+      <td>${fmtDate(d.confirm)}</td><td>${fmtDate(d.armado)}</td><td>${fmtDate(d.prueba)}</td><td>${fmtDate(d.entrega)}</td>
+      <td>${badge}</td>`;
+    frag.appendChild(tr);
+  });
+  tbody.innerHTML = '';
+  tbody.appendChild(frag);
+}
+
+// ---------- Init ----------
+loadAll();
+setInterval(() => loadAll(), REFRESH_MS);
+</script>
+</body>
+</html>
