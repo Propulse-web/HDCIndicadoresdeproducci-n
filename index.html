@@ -1,0 +1,1236 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tablero de Tiempos — Taller HDC</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<style>
+  :root{
+    --navy:#0F2A4A;
+    --navy2:#173A63;
+    --steel:#2E75B6;
+    --steel-light:#5B9BD5;
+    --amber:#D98A2B;
+    --bg:#EEF2F6;
+    --card:#FFFFFF;
+    --ink:#16232F;
+    --ink-soft:#5B6B7A;
+    --line:#D8E0E8;
+    --good:#2F8F5B;
+    --warn:#D9822B;
+    --bad:#C0392B;
+    font-family:'Segoe UI',Arial,sans-serif;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--ink);}
+  header{
+    background:linear-gradient(120deg,var(--navy) 0%,var(--navy2) 55%,var(--steel) 130%);
+    color:#fff;padding:28px 32px 22px;position:relative;overflow:hidden;
+  }
+  header::after{
+    content:"";position:absolute;right:-60px;top:-60px;width:260px;height:260px;
+    border-radius:50%;background:rgba(255,255,255,0.06);
+  }
+  header h1{margin:0 0 4px;font-size:1.6rem;letter-spacing:.3px;}
+  header p{margin:0;color:#C9D8E8;font-size:.85rem;}
+  .status-bar{
+    display:flex;align-items:center;gap:14px;margin-top:14px;flex-wrap:wrap;font-size:.78rem;color:#DCE8F5;
+  }
+  .dot{width:9px;height:9px;border-radius:50%;background:#8fe0a8;display:inline-block;box-shadow:0 0 0 3px rgba(143,224,168,.25);}
+  .dot.stale{background:#e0c98f;box-shadow:0 0 0 3px rgba(224,201,143,.25);}
+  .dot.err{background:#e08f8f;box-shadow:0 0 0 3px rgba(224,143,143,.25);}
+  button.refresh{
+    background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.35);color:#fff;
+    padding:5px 12px;border-radius:20px;font-size:.75rem;cursor:pointer;transition:.15s;
+  }
+  button.refresh:hover{background:rgba(255,255,255,.22);}
+  main{max-width:1360px;margin:0 auto;padding:24px 32px 60px;}
+
+  .kpi-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:14px;margin-bottom:26px;}
+  @media (max-width:1100px){.kpi-grid{grid-template-columns:repeat(3,1fr);}}
+  @media (max-width:640px){.kpi-grid{grid-template-columns:repeat(2,1fr);}}
+  .kpi{
+    background:var(--card);border-radius:10px;padding:16px 14px;border:1px solid var(--line);
+    box-shadow:0 1px 3px rgba(15,42,74,.06);position:relative;overflow:hidden;
+  }
+  .kpi::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--steel);}
+  .kpi.total::before{background:var(--amber);}
+  .kpi .lab{font-size:.66rem;text-transform:uppercase;letter-spacing:.5px;color:var(--ink-soft);font-weight:600;min-height:28px;}
+  .kpi .val{font-size:1.7rem;font-weight:700;color:var(--navy);margin:4px 0 2px;}
+  .kpi .sub{font-size:.68rem;color:var(--ink-soft);}
+
+  section{background:var(--card);border-radius:12px;border:1px solid var(--line);padding:20px 22px;margin-bottom:22px;box-shadow:0 1px 3px rgba(15,42,74,.05);}
+  section h2{margin:0 0 4px;font-size:1.02rem;color:var(--navy);}
+  section .desc{font-size:.78rem;color:var(--ink-soft);margin:0 0 16px;}
+
+  .grid2{display:grid;grid-template-columns:1.1fr .9fr;gap:20px;}
+  @media (max-width:960px){.grid2{grid-template-columns:1fr;}}
+  .chart-wrap{position:relative;height:300px;}
+
+  table{width:100%;border-collapse:collapse;font-size:.8rem;}
+  thead th{
+    background:var(--navy);color:#fff;text-align:left;padding:9px 10px;font-weight:600;
+    position:sticky;top:0;font-size:.72rem;text-transform:uppercase;letter-spacing:.3px;
+  }
+  tbody td{padding:8px 10px;border-bottom:1px solid var(--line);}
+  tbody tr:nth-child(even){background:#F7FAFD;}
+  tbody tr:hover{background:#EAF2FA;}
+  .table-scroll{max-height:460px;overflow:auto;border:1px solid var(--line);border-radius:8px;}
+  .toolbar{display:flex;gap:10px;align-items:center;margin-bottom:14px;flex-wrap:wrap;}
+  .toolbar input[type=text]{
+    padding:7px 12px;border:1px solid var(--line);border-radius:20px;font-size:.8rem;min-width:220px;
+  }
+  .pill{background:#EEF2F6;color:var(--ink-soft);border-radius:20px;padding:5px 12px;font-size:.72rem;font-weight:600;}
+  .badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:.68rem;font-weight:700;color:#fff;}
+  .badge.good{background:var(--good);}
+  .badge.warn{background:var(--warn);}
+  .badge.bad{background:var(--bad);}
+
+  #configPanel{display:none;}
+  #configPanel.open{display:block;}
+  .cfg-row{display:flex;align-items:center;gap:10px;margin-bottom:8px;font-size:.8rem;}
+  .cfg-row label{width:230px;color:var(--ink-soft);}
+  .cfg-row input{flex:1;padding:6px 10px;border:1px solid var(--line);border-radius:6px;font-size:.8rem;}
+  .cfg-actions{margin-top:12px;display:flex;gap:10px;}
+  .btn{
+    background:var(--steel);color:#fff;border:none;padding:8px 16px;border-radius:6px;font-size:.8rem;
+    cursor:pointer;font-weight:600;
+  }
+  .btn.secondary{background:transparent;color:var(--steel);border:1px solid var(--steel);}
+  .hint{font-size:.72rem;color:var(--ink-soft);line-height:1.5;margin-top:8px;}
+  .hint code{background:#EEF2F6;padding:1px 5px;border-radius:4px;}
+  .empty{padding:40px;text-align:center;color:var(--ink-soft);font-size:.85rem;}
+  footer{text-align:center;color:#8494A2;font-size:.72rem;padding:20px;}
+  .hdr-select{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.35);color:#fff;padding:5px 12px;border-radius:20px;font-size:.75rem;cursor:pointer;}
+  .hdr-select option, #monthFilter option{color:#16232F;}
+  .cat-badge{display:inline-block;min-width:22px;text-align:center;padding:2px 7px;border-radius:10px;font-size:.68rem;font-weight:700;color:#fff;background:var(--ink-soft);}
+  .cat-badge.A{background:#2E75B6;} .cat-badge.B{background:#D98A2B;} .cat-badge.C{background:#7A4FA0;}
+  a.link{color:var(--steel);text-decoration:none;}
+  a.link:hover{text-decoration:underline;}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Tablero de Tiempos — Taller HDC</h1>
+  <p>Etapas del proceso: Ingreso → Desarme → Confirmación → Armado → Prueba OK → Entrega</p>
+  <div class="status-bar">
+    <span><span class="dot" id="statusDot"></span> <span id="statusText">Cargando datos…</span></span>
+    <span class="pill" id="lastUpdate">—</span>
+    <select id="monthFilter" onchange="onMonthFilterChange()"
+      style="background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.35);color:#fff;padding:5px 12px;border-radius:20px;font-size:.75rem;cursor:pointer;">
+      <option value="all">Todos los meses</option>
+    </select>
+    <select id="bombaFilter" class="hdr-select" onchange="onDimFilterChange()"><option value="all">Todas las bombas</option></select>
+    <select id="catFilter" class="hdr-select" onchange="onDimFilterChange()"><option value="all">Todas las categorías</option></select>
+    <button class="refresh" onclick="loadAll(true)">↻ Actualizar ahora</button>
+    <button class="refresh" onclick="toggleConfig()">⚙ Ver / ajustar hojas</button>
+  </div>
+</header>
+
+<main>
+
+  <section id="configPanel">
+    <h2>Hojas leídas por nombre</h2>
+    <p class="desc" id="discoveryDesc">
+      Esta página pide cada pestaña directamente por su nombre a Google (no usa <code>gid</code> ni tiene que
+      "descubrir" nada primero), así que se completa sola siempre que los nombres de las pestañas en el Sheet
+      coincidan con los de abajo. Si en algún momento renombran una pestaña, corregí el nombre acá.
+    </p>
+    <div class="cfg-row"><label>Ficha de ingreso</label><input id="cfg_ingreso" placeholder="FICHA DE INGRESO"></div>
+    <div class="cfg-row"><label>Registro de desarme</label><input id="cfg_desarme" placeholder="REGISTRO DE DESARME"></div>
+    <div class="cfg-row"><label>Confirmación de cliente</label><input id="cfg_confirm" placeholder="CONFIRMACION DE CLIENTE"></div>
+    <div class="cfg-row"><label>Registro de armado</label><input id="cfg_armado" placeholder="REGISTRO DE ARMADO"></div>
+    <div class="cfg-row"><label>Registro de prueba</label><input id="cfg_prueba" placeholder="REGISTRO DE PRUEBA"></div>
+    <div class="cfg-row"><label>Registro de entrega</label><input id="cfg_entrega" placeholder="REGISTRO DE ENTREGA"></div>
+    <div class="cfg-row"><label>Inicio de armado</label><input id="cfg_iniciarmado" placeholder="INICIO DE ARMADO"></div>
+    <div class="cfg-row"><label>Prueba no conforme</label><input id="cfg_pruebaNC" placeholder="REGISTRO DE PRUEBA NO CONFORME"></div>
+    <div class="cfg-row"><label>Control producto OK</label><input id="cfg_controlOk" placeholder="CONTROL PRODUCTO OK"></div>
+    <h2 style="font-size:.9rem;margin-top:16px;">Columnas de clasificación</h2>
+    <p class="desc">Se detectan solas (buscan "tipo de bomba", "bomba", "modelo"… y "categoría", "clase", "tipo"…). Si la detección elige mal, escribí acá el nombre exacto del encabezado.</p>
+    <div class="cfg-row"><label>Columna tipo de bomba</label><input id="cfg_colBomba" placeholder="(automático)"></div>
+    <div class="cfg-row"><label>Columna categoría (A/B/C)</label><input id="cfg_colCat" placeholder="(automático)"></div>
+    <div class="cfg-actions">
+      <button class="btn" onclick="saveConfig()">Guardar nombres y recargar</button>
+      <button class="btn secondary" onclick="toggleConfig()">Cerrar</button>
+    </div>
+    <p class="hint">
+      Los nombres deben coincidir exactamente con el nombre de la pestaña en Google Sheets (no hace falta
+      mayúsculas/tildes exactas, la página normaliza eso, pero sí el texto en general).
+    </p>
+    <div id="diagBox" style="margin-top:14px;font-size:.72rem;color:var(--ink-soft);border-top:1px solid var(--line);padding-top:10px;"></div>
+  </section>
+
+  <div class="kpi-grid" id="kpiGrid">
+    <!-- KPI cards injected by JS -->
+  </div>
+
+  <section>
+    <h2>Valores atípicos detectados</h2>
+    <div id="outlierBox"></div>
+  </section>
+
+  <section>
+    <div class="grid2">
+      <div>
+        <h2>Promedio de días por etapa</h2>
+        <p class="desc">Días corridos promedio entre el registro de una etapa y la siguiente.</p>
+        <div class="chart-wrap"><canvas id="barStages"></canvas></div>
+      </div>
+      <div>
+        <h2>Distribución del tiempo total</h2>
+        <p class="desc">Ingreso → Entrega, por rango de días.</p>
+        <div class="chart-wrap"><canvas id="donutTotal"></canvas></div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Tendencia mensual</h2>
+    <p class="desc">Evolución del tiempo total promedio (línea) y volumen de fichas ingresadas (barras), por mes de ingreso.</p>
+    <div class="chart-wrap" style="height:340px;"><canvas id="lineMonthly"></canvas></div>
+  </section>
+
+  <section>
+    <h2>Estado del taller</h2>
+    <p class="desc">Fichas abiertas (con ingreso y sin entrega), antigüedad, cumplimiento y retrabajo, según los filtros elegidos.</p>
+    <div class="kpi-grid" id="wipKpiGrid" style="margin-bottom:18px;"></div>
+    <div class="grid2">
+      <div>
+        <h2 style="font-size:.92rem;">Fichas abiertas según dónde están esperando</h2>
+        <p class="desc">Última etapa registrada de cada ficha todavía no entregada.</p>
+        <div class="chart-wrap" style="height:260px;"><canvas id="barWip"></canvas></div>
+      </div>
+      <div>
+        <h2 style="font-size:.92rem;">Fichas abiertas más antiguas</h2>
+        <p class="desc">Días desde el ingreso hasta hoy.</p>
+        <div class="table-scroll" style="max-height:260px;">
+          <table><thead><tr><th>N° Ficha</th><th>Bomba</th><th>Cat.</th><th>Esperando</th><th>Días</th></tr></thead>
+          <tbody id="wipOldBody"></tbody></table>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Indicadores por tipo de bomba</h2>
+    <p class="desc">Promedio de días por etapa (sin atípicos) para cada tipo de bomba. El gráfico muestra los 12 tipos con más fichas.</p>
+    <div class="chart-wrap" style="height:380px;"><canvas id="barBomba"></canvas></div>
+    <div class="table-scroll" style="margin-top:16px;max-height:380px;">
+      <table>
+        <thead><tr><th>Tipo de bomba</th><th>Fichas</th><th>Entregadas</th><th>Abiertas</th><th>Total prom.</th><th>Mediana</th><th>≤15 días</th><th>Con no conf.</th><th>Etapa más lenta</th></tr></thead>
+        <tbody id="bombaBody"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2>Indicadores por categoría (A / B / C)</h2>
+    <p class="desc">Mismo análisis agrupado por categoría.</p>
+    <div class="grid2">
+      <div><div class="chart-wrap"><canvas id="barCat"></canvas></div></div>
+      <div><div class="chart-wrap"><canvas id="donutCat"></canvas></div></div>
+    </div>
+    <div class="table-scroll" style="margin-top:16px;">
+      <table>
+        <thead><tr><th>Categoría</th><th>Fichas</th><th>Entregadas</th><th>Abiertas</th><th>Total prom.</th><th>Mediana</th><th>≤15 días</th><th>Con no conf.</th><th>Etapa más lenta</th></tr></thead>
+        <tbody id="catBody"></tbody>
+      </table>
+    </div>
+    <h2 style="font-size:.92rem;margin-top:20px;">Cruce tipo de bomba × categoría</h2>
+    <p class="desc">Cantidad de fichas y, entre paréntesis, días totales promedio.</p>
+    <div class="table-scroll" style="max-height:340px;"><table id="crossTable"></table></div>
+  </section>
+
+  <section>
+    <h2>Detalle por ficha</h2>
+    <p class="desc">Fechas de cada etapa y días transcurridos. Se actualiza junto con el resto del tablero.</p>
+    <div class="toolbar">
+      <input type="text" id="searchBox" placeholder="Buscar N° de ficha o bomba…" oninput="renderTable()">
+      <span class="pill" id="rowCount">0 fichas</span>
+    </div>
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>N° Ficha</th><th>Bomba</th><th>Cat.</th><th>Ingreso</th><th>Desarme</th><th>Confirmación</th><th>Armado</th><th>Prueba OK</th><th>Entrega</th><th>Total (días)</th>
+          </tr>
+        </thead>
+        <tbody id="tableBody"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2>Indicadores adicionales</h2>
+    <p class="desc">Tiempos de armado por operario, cumplimiento de pruebas y tiempo hasta control final.</p>
+
+    <div class="kpi-grid" id="extraKpiGrid" style="grid-template-columns:repeat(3,1fr);margin-bottom:22px;"></div>
+
+    <div class="grid2">
+      <div>
+        <h2 style="font-size:.92rem;">Inicio de Armado → Registro de Armado, por operario</h2>
+        <p class="desc">Promedio de días desde que se registra el inicio de armado hasta que queda registrado el armado, agrupado por quién armó.</p>
+        <div class="table-scroll" style="max-height:280px;">
+          <table>
+            <thead><tr><th>Operario</th><th>Promedio</th><th>Mediana</th><th>N</th></tr></thead>
+            <tbody id="armadoPorOperarioBody"></tbody>
+          </table>
+        </div>
+      </div>
+      <div>
+        <h2 style="font-size:.92rem;">Pruebas no conformes por motivo</h2>
+        <p class="desc">Cantidad de veces que un producto volvió al taller, agrupado por motivo declarado.</p>
+        <div class="table-scroll" style="max-height:280px;">
+          <table>
+            <thead><tr><th>Motivo</th><th>Cantidad</th></tr></thead>
+            <tbody id="motivoNCBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <h2 style="font-size:.92rem;margin-top:20px;">Detalle de pruebas no conformes</h2>
+    <p class="desc">Últimos registros de "Prueba no conforme", con ficha, cliente, componente y motivo.</p>
+    <div class="table-scroll" style="max-height:300px;">
+      <table>
+        <thead><tr><th>N° Ficha</th><th>Cliente</th><th>Componente</th><th>Motivo</th></tr></thead>
+        <tbody id="detalleNCBody"></tbody>
+      </table>
+    </div>
+    <div id="extraOutlierBox"></div>
+  </section>
+
+  <footer>
+    Datos leídos en vivo desde Google Sheets · Actualización automática cada 5 minutos ·
+    <a class="link" href="https://docs.google.com/spreadsheets/d/1j9Z4yTY3AeLTwlGHOKpHPGEipaYHWi1w3zqq_6yc3Lc/edit" target="_blank">Ver planilla original</a>
+  </footer>
+
+</main>
+
+<script>
+const SPREADSHEET_ID = "1j9Z4yTY3AeLTwlGHOKpHPGEipaYHWi1w3zqq_6yc3Lc";
+const REFRESH_MS = 5 * 60 * 1000; // 5 minutos
+
+const DEFAULT_NAMES = {
+  ingreso: 'FICHA DE INGRESO',
+  desarme: 'REGISTRO DE DESARME',
+  confirm: 'CONFIRMACION DE CLIENTE',
+  armado:  'REGISTRO DE ARMADO',
+  prueba:  'REGISTRO DE PRUEBA',
+  entrega: 'REGISTRO DE ENTREGA',
+  iniciarmado: 'INICIO DE ARMADO',
+  pruebaNC:    'REGISTRO DE PRUEBA NO CONFORME',
+  controlOk:   'CONTROL PRODUCTO OK',
+};
+
+// ---------- Config (nombres de pestaña) — con default embebido, ajustable desde el panel si hace falta ----------
+function paramsFromUrl(){
+  const p = new URLSearchParams(location.search);
+  const out = {};
+  for (const k in DEFAULT_NAMES) out[k] = p.get(k) || '';
+  return out;
+}
+function applyConfig(){
+  const manual = paramsFromUrl();
+  CFG = {};
+  for (const k in DEFAULT_NAMES) CFG[k] = manual[k] || DEFAULT_NAMES[k];
+  const p = new URLSearchParams(location.search);
+  CFG_COLS = { bomba: p.get('colBomba') || '', cat: p.get('colCat') || '' };
+}
+let CFG = {};
+let CFG_COLS = { bomba:'', cat:'' };
+applyConfig();
+
+function toggleConfig(){
+  document.getElementById('configPanel').classList.toggle('open');
+  for (const k in DEFAULT_NAMES){
+    const el = document.getElementById('cfg_'+k);
+    el.value = CFG[k] || '';
+    el.placeholder = DEFAULT_NAMES[k];
+  }
+  document.getElementById('cfg_colBomba').value = CFG_COLS.bomba;
+  document.getElementById('cfg_colCat').value = CFG_COLS.cat;
+}
+function saveConfig(){
+  const manualVals = {};
+  for (const k in DEFAULT_NAMES) manualVals[k] = document.getElementById('cfg_'+k).value.trim();
+  const overrides = {};
+  for (const k in manualVals){
+    if (manualVals[k] && manualVals[k] !== DEFAULT_NAMES[k]) overrides[k] = manualVals[k];
+  }
+  const cb = document.getElementById('cfg_colBomba').value.trim();
+  const cc = document.getElementById('cfg_colCat').value.trim();
+  if (cb) overrides.colBomba = cb;
+  if (cc) overrides.colCat = cc;
+  const p = new URLSearchParams(overrides);
+  const qs = p.toString();
+  history.replaceState(null, '', location.pathname + (qs ? '?'+qs : ''));
+  applyConfig();
+  toggleConfig();
+  loadAll(true);
+}
+
+// gviz: se pide cada pestaña por NOMBRE (no por gid), funciona mientras el Sheet esté compartido
+// como "Cualquiera con el enlace puede ver". Devuelve CSV plano, con soporte de CORS.
+function gvizUrl(sheetName){
+  return `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/gviz/tq`
+       + `?tqx=out:csv&sheet=${encodeURIComponent(sheetName)}&headers=1&_=${Date.now()}`;
+}
+
+// ---------- CSV parser (handles quoted fields, commas, newlines) ----------
+function parseCSV(text){
+  const rows = [];
+  let row = [], field = '', inQuotes = false;
+  for (let i=0; i<text.length; i++){
+    const c = text[i], n = text[i+1];
+    if (inQuotes){
+      if (c === '"' && n === '"'){ field += '"'; i++; }
+      else if (c === '"'){ inQuotes = false; }
+      else { field += c; }
+    } else {
+      if (c === '"'){ inQuotes = true; }
+      else if (c === ','){ row.push(field); field=''; }
+      else if (c === '\n'){ row.push(field); rows.push(row); row=[]; field=''; }
+      else if (c === '\r'){ /* skip */ }
+      else { field += c; }
+    }
+  }
+  if (field.length || row.length){ row.push(field); rows.push(row); }
+  return rows;
+}
+
+async function fetchSheet(sheetName){
+  if (!sheetName) return null;
+  try{
+    const res = await fetch(gvizUrl(sheetName), {cache:'no-store'});
+    if (!res.ok) throw new Error('HTTP '+res.status);
+    const text = await res.text();
+    if (/^<!DOCTYPE html/i.test(text.trim())) throw new Error('La hoja "'+sheetName+'" no existe o no es pública.');
+    const rows = parseCSV(text);
+    if (!rows.length) return null;
+    const headers = rows[0].map(h => h.trim());
+    return rows.slice(1).filter(r => r.some(v => v && v.trim()!== '')).map(r => {
+      const obj = {};
+      headers.forEach((h,i) => obj[h] = (r[i]||'').trim());
+      return obj;
+    });
+  } catch(e){
+    console.error('Error leyendo hoja "'+sheetName+'"', e);
+    return null;
+  }
+}
+
+function findCol(row, candidates, fallbackIndex){
+  const keys = Object.keys(row);
+  for (const c of candidates){
+    const hit = keys.find(k => k.toLowerCase().replace(/\s+/g,' ').trim() === c.toLowerCase());
+    if (hit) return hit;
+  }
+  // fallback: partial match
+  for (const c of candidates){
+    const hit = keys.find(k => k.toLowerCase().includes(c.toLowerCase()));
+    if (hit) return hit;
+  }
+  // último recurso: si el nombre de columna no calzó (encabezado raro/columna sin nombre),
+  // usar la posición conocida de la planilla original
+  if (fallbackIndex !== undefined && keys[fallbackIndex] !== undefined) return keys[fallbackIndex];
+  return null;
+}
+
+// ---------- Clasificación: tipo de bomba y categoría ----------
+function normTxt(s){ return String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().replace(/\s+/g,' ').trim(); }
+function findColNorm(row, cands, exclude){
+  const keys = Object.keys(row).filter(k => !(exclude||[]).includes(k));
+  for (const c of cands){ const h = keys.find(k => normTxt(k) === normTxt(c)); if (h) return h; }
+  for (const c of cands){ const h = keys.find(k => normTxt(k).includes(normTxt(c))); if (h) return h; }
+  return null;
+}
+const BOMBA_CANDS = ['tipo de bomba','tipo bomba','bomba','modelo de bomba','modelo','equipo'];
+const CAT_CANDS   = ['categoria','categoría','clase','tipo de reparacion','tipo de servicio','tipo'];
+function normCat(v){
+  const t = String(v||'').trim();
+  if (!t) return null;
+  const m = t.match(/^(?:tipo|categor[ií]a|cat\.?|clase)?\s*[:\-]?\s*([ABC])\b/i) || t.match(/\b([ABC])\b/);
+  return m ? m[1].toUpperCase() : t.toUpperCase();
+}
+function normBomba(v){
+  const t = String(v||'').trim().replace(/\s+/g,' ');
+  return t ? t.toUpperCase() : null;
+}
+
+function parseDate(v){
+  if (!v) return null;
+  v = v.trim();
+  if (!v) return null;
+  // gviz (Google Visualization API) exporta fechas como literal "Date(2024,8,2,12,0,12)"
+  // donde el mes ya viene 0-indexado (agosto=7, etc.), igual que en JS Date.
+  let gm = v.match(/^Date\((\d+),(\d+),(\d+)(?:,(\d+),(\d+),(\d+))?\)$/);
+  if (gm){
+    const d = new Date(+gm[1], +gm[2], +gm[3], +(gm[4]||0), +(gm[5]||0), +(gm[6]||0));
+    if (!isNaN(d.getTime())) return d;
+  }
+  // Formato argentino DD/MM/AAAA [hh:mm[:ss]] — se intenta ANTES que el parseo nativo del navegador,
+  // porque new Date(string) asume M/D/Y (formato EE.UU.) y da resultados silenciosamente incorrectos
+  // (fechas de días ≤12 quedan con día y mes invertidos; fechas de días >12 directamente desbordan
+  // el mes y "saltan" uno o varios años hacia el futuro).
+  const m = v.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?/);
+  if (m){
+    const dia = +m[1], mes = +m[2];
+    let d = new Date(+m[3], mes-1, dia, +(m[4]||0), +(m[5]||0), +(m[6]||0));
+    if (!isNaN(d.getTime())) return d;
+  }
+  // Último recurso: formatos tipo ISO ("2024-09-02T12:00:12") que sí son inambiguos
+  let d = new Date(v);
+  if (!isNaN(d.getTime())) return d;
+  return null;
+}
+
+function parseFicha(v){
+  if (v===null || v===undefined) return null;
+  // gviz puede exportar números como "11,357" (separador de miles) o "11357.0"
+  const cleaned = String(v).replace(/,/g,'').trim();
+  const n = parseFloat(cleaned);
+  if (isNaN(n)) return null;
+  return Math.trunc(n);
+}
+
+function minByFicha(rows, fichaCol, dateCol, filterFn){
+  const map = {};
+  if (!rows) return map;
+  rows.forEach(r => {
+    if (filterFn && !filterFn(r)) return;
+    const f = parseFicha(r[fichaCol]);
+    if (!f) return;
+    const d = parseDate(r[dateCol]);
+    if (!d) return;
+    if (!map[f] || d < map[f]) map[f] = d;
+  });
+  return map;
+}
+
+function daysBetween(a,b){
+  if (!a || !b) return null;
+  const diff = (b - a) / 86400000;
+  if (diff < 0 || diff > 365) return null;
+  return diff;
+}
+function fmtDate(d){
+  if (!d) return '—';
+  return d.toLocaleDateString('es-AR', {day:'2-digit',month:'2-digit',year:'numeric'}) + ' ' +
+         d.toLocaleTimeString('es-AR', {hour:'2-digit',minute:'2-digit'});
+}
+function fmtDays(v){ return (v===null||v===undefined||isNaN(v)) ? '—' : v.toFixed(1); }
+// Convierte un valor en DÍAS (fraccionarios) a un texto en horas y minutos, ej: "2h 15min" o "45 min"
+function fmtHM(daysVal){
+  if (daysVal===null || daysVal===undefined || isNaN(daysVal)) return '—';
+  let totalMin = Math.round(daysVal * 24 * 60);
+  if (totalMin < 1) totalMin = 0;
+  const h = Math.floor(totalMin / 60);
+  const m = totalMin % 60;
+  if (h === 0) return `${m} min`;
+  if (m === 0) return `${h} h`;
+  return `${h} h ${m} min`;
+}
+
+let DATASET = [];      // per-ficha merged records, YA FILTRADOS por el mes seleccionado
+let DATASET_ALL = [];  // per-ficha merged records, sin filtrar (universo completo)
+let selectedMonth = 'all';
+let selectedBomba = 'all';
+let selectedCat = 'all';
+let FICHA_INFO = {};   // ficha -> {bomba, cat}
+const SIN = 'Sin dato';
+function infoOf(f){ const i = FICHA_INFO[f] || {}; return { bomba: i.bomba || SIN, cat: i.cat || SIN }; }
+
+function fillSelect(id, values, allLabel, current){
+  const sel = document.getElementById(id);
+  sel.innerHTML = `<option value="all">${allLabel}</option>` +
+    values.map(v => `<option value="${esc(v)}">${esc(v)}</option>`).join('');
+  const keep = values.includes(current) ? current : 'all';
+  sel.value = keep;
+  return keep;
+}
+function populateDimOptions(){
+  const bs = new Set(), cs = new Set();
+  DATASET_ALL.forEach(d => { bs.add(d.bomba); cs.add(d.cat); });
+  const sortSin = arr => arr.sort((a,b) => (a===SIN)-(b===SIN) || a.localeCompare(b));
+  selectedBomba = fillSelect('bombaFilter', sortSin([...bs]), 'Todas las bombas', selectedBomba);
+  selectedCat   = fillSelect('catFilter',   sortSin([...cs]), 'Todas las categorías', selectedCat);
+}
+function onDimFilterChange(){
+  selectedBomba = document.getElementById('bombaFilter').value;
+  selectedCat   = document.getElementById('catFilter').value;
+  applyFilter();
+}
+
+const MONTH_NAMES = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+function getMonthKey(d){ return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0'); }
+function monthLabel(key){
+  const [y,m] = key.split('-');
+  return MONTH_NAMES[+m-1] + ' ' + y;
+}
+
+function populateMonthOptions(){
+  const sel = document.getElementById('monthFilter');
+  const keys = new Set();
+  DATASET_ALL.forEach(d => { if (d.ingreso) keys.add(getMonthKey(d.ingreso)); });
+  const sorted = [...keys].sort(); // ascendente
+  const prevValue = selectedMonth;
+  sel.innerHTML = '<option value="all">Todos los meses</option>' +
+    sorted.map(k => `<option value="${k}">${monthLabel(k)}</option>`).join('');
+  // si el mes elegido sigue existiendo en los datos nuevos, lo mantenemos; si no, volvemos a "todos"
+  selectedMonth = sorted.includes(prevValue) ? prevValue : 'all';
+  sel.value = selectedMonth;
+}
+
+function onMonthFilterChange(){
+  selectedMonth = document.getElementById('monthFilter').value;
+  applyFilter();
+}
+
+function applyFilter(){
+  const inMonth = (d) => selectedMonth === 'all' || (d && getMonthKey(d) === selectedMonth);
+
+  const okDim = (f) => {
+    const i = infoOf(f);
+    return (selectedBomba === 'all' || i.bomba === selectedBomba) && (selectedCat === 'all' || i.cat === selectedCat);
+  };
+
+  DATASET = DATASET_ALL.filter(d => (selectedMonth === 'all' || inMonth(d.ingreso)) && okDim(d.ficha));
+
+  const extraAll = window.__EXTRA_ALL__ || { armadoDurations:[], noConformeRows:[], confirmToControlOkPairs:[] };
+  const armadoDurations = extraAll.armadoDurations.filter(a => inMonth(a.ts) && okDim(a.ficha));
+  const noConformeRows  = extraAll.noConformeRows.filter(r => inMonth(r.ts) && okDim(r.ficha));
+  const confirmToControlOkPairs = extraAll.confirmToControlOkPairs.filter(p => inMonth(p.ts) && okDim(p.ficha));
+  const motivoCounts = {};
+  noConformeRows.forEach(r => { motivoCounts[r.motivo] = (motivoCounts[r.motivo]||0) + 1; });
+
+  window.__EXTRA__ = { armadoDurations, noConformeRows, motivoCounts, confirmToControlOkPairs };
+
+  renderKPIs();
+  renderCharts();
+  renderTable();
+  renderExtraIndicators();
+  renderWIP();
+  renderGroups();
+}
+let charts = {};
+
+async function loadAll(manual){
+  setStatus('loading');
+  try{
+    const [ingreso, desarme, confirm, armado, prueba, entrega, iniciarmado, pruebaNC, controlOk] = await Promise.all([
+      fetchSheet(CFG.ingreso), fetchSheet(CFG.desarme), fetchSheet(CFG.confirm),
+      fetchSheet(CFG.armado), fetchSheet(CFG.prueba), fetchSheet(CFG.entrega),
+      fetchSheet(CFG.iniciarmado), fetchSheet(CFG.pruebaNC), fetchSheet(CFG.controlOk)
+    ]);
+
+    const coreSheets = [ingreso,desarme,confirm,armado,prueba,entrega];
+    const sheetsLoaded = coreSheets.filter(x=>x).length;
+
+    // Diagnóstico visible (para no depender de la consola del navegador)
+    const diag = {};
+    [['ingreso',ingreso],['desarme',desarme],['confirm',confirm],['armado',armado],['prueba',prueba],['entrega',entrega],
+     ['iniciarmado',iniciarmado],['pruebaNC',pruebaNC],['controlOk',controlOk]]
+      .forEach(([k,rows]) => {
+        diag[k] = rows ? { filas: rows.length, columnas: Object.keys(rows[0]||{}) } : { filas: 0, columnas: [] };
+      });
+    window.__DIAG__ = diag;
+    renderDiag(diag);
+
+    if (sheetsLoaded === 0){
+      setStatus('error', 'No se pudo leer ninguna hoja. Verificá que el Sheet esté compartido como "Cualquiera con el enlace puede ver", o revisá los nombres en "⚙ Ver / ajustar hojas".');
+      renderEmpty();
+      return;
+    }
+
+    const mIngreso = ingreso ? minByFicha(ingreso, findCol(ingreso[0],['numero de ficha','n de ficha'],1), findCol(ingreso[0],['marca temporal'],0)) : {};
+    const mDesarme = desarme ? minByFicha(desarme, findCol(desarme[0],['numero de ficha'],1), findCol(desarme[0],['marca temporal'],0)) : {};
+    const mConfirm = confirm ? minByFicha(confirm, findCol(confirm[0],['numero de ficha'],2), findCol(confirm[0],['marca temporal'],0)) : {};
+    const mArmado  = armado  ? minByFicha(armado,  findCol(armado[0],['numero de ficha'],1),  findCol(armado[0],['marca temporal'],0)) : {};
+    const mPrueba  = prueba  ? minByFicha(prueba,  findCol(prueba[0],['numero de ficha'],1),  findCol(prueba[0],['marca temporal'],0),
+                                r => { const ec = findCol(prueba[0],['estado'],6); return !ec || /ok/i.test(r[ec]||''); }) : {};
+    const mEntrega = entrega ? minByFicha(entrega, findCol(entrega[0],['verificar numero de ficha','numero de ficha'],3), findCol(entrega[0],['marca temporal'],0)) : {};
+
+    // ---- Clasificación por ficha: tipo de bomba y categoría (se toma el primer valor no vacío, priorizando Ingreso) ----
+    FICHA_INFO = {};
+    const colsUsed = {};
+    [['ingreso',ingreso,['numero de ficha','n de ficha'],1], ['desarme',desarme,['numero de ficha'],1],
+     ['confirm',confirm,['numero de ficha'],2], ['armado',armado,['numero de ficha'],1],
+     ['prueba',prueba,['numero de ficha'],1], ['entrega',entrega,['verificar numero de ficha','numero de ficha'],3],
+     ['iniciarmado',iniciarmado,['numero de ficha'],2], ['controlOk',controlOk,['numero de ficha'],1]]
+    .forEach(([k, rows, fc, fi]) => {
+      if (!rows || !rows.length) return;
+      const fCol = findCol(rows[0], fc, fi);
+      const bCol = CFG_COLS.bomba ? findColNorm(rows[0], [CFG_COLS.bomba]) : findColNorm(rows[0], BOMBA_CANDS, [fCol]);
+      const cCol = CFG_COLS.cat   ? findColNorm(rows[0], [CFG_COLS.cat])   : findColNorm(rows[0], CAT_CANDS, [fCol, bCol]);
+      colsUsed[k] = { bomba: bCol, cat: cCol };
+      if (!bCol && !cCol) return;
+      rows.forEach(r => {
+        const f = parseFicha(r[fCol]); if (!f) return;
+        const i = FICHA_INFO[f] = FICHA_INFO[f] || {};
+        if (!i.bomba && bCol) i.bomba = normBomba(r[bCol]);
+        if (!i.cat && cCol)   i.cat   = normCat(r[cCol]);
+      });
+    });
+    renderColsDiag(colsUsed);
+
+    // ---- Nuevos indicadores ----
+    // 1) Inicio de Armado -> Registro de Armado, con detalle por operario ("QUIEN ARMA?")
+    let inicioArmadoRows = [];
+    if (iniciarmado && iniciarmado.length){
+      const fCol = findCol(iniciarmado[0], ['numero de ficha'], 2);
+      const tCol = findCol(iniciarmado[0], ['marca temporal'], 0);
+      const opCol = findCol(iniciarmado[0], ['quien arma'], 1);
+      iniciarmado.forEach(r => {
+        const f = parseFicha(r[fCol]);
+        const t = parseDate(r[tCol]);
+        if (!f || !t) return;
+        inicioArmadoRows.push({ ficha: f, ts: t, operario: (r[opCol]||'Sin dato').trim() });
+      });
+    }
+    // Para cada ficha, tomamos el primer "inicio de armado" y lo cruzamos con el primer "registro de armado" (mArmado)
+    const inicioArmadoByFicha = {};
+    inicioArmadoRows.forEach(r => {
+      if (!inicioArmadoByFicha[r.ficha] || r.ts < inicioArmadoByFicha[r.ficha].ts) inicioArmadoByFicha[r.ficha] = r;
+    });
+    const armadoDurations = []; // {ficha, operario, dias, ts}
+    Object.keys(inicioArmadoByFicha).forEach(f => {
+      const ini = inicioArmadoByFicha[f];
+      const fin = mArmado[f];
+      const d = daysBetween(ini.ts, fin);
+      if (d !== null) armadoDurations.push({ ficha: f, operario: ini.operario, dias: d, ts: ini.ts });
+    });
+
+    // 2) Pruebas no conformes: contador + motivo
+    let noConformeRows = [];
+    if (pruebaNC && pruebaNC.length){
+      const fCol = findCol(pruebaNC[0], ['numero de ficha'], 1);
+      const cCol = findCol(pruebaNC[0], ['cliente'], 2);
+      const compCol = findCol(pruebaNC[0], ['componente'], 3);
+      const motCol = findCol(pruebaNC[0], ['por que vuelve al taller','motivo'], 4);
+      const tCol = findCol(pruebaNC[0], ['marca temporal'], 0);
+      noConformeRows = pruebaNC.map(r => ({
+        ficha: parseFicha(r[fCol]),
+        cliente: (r[cCol]||'').trim(),
+        componente: (r[compCol]||'').trim(),
+        motivo: (r[motCol]||'Sin especificar').trim(),
+        ts: parseDate(r[tCol]),
+      })).filter(r => r.ficha);
+    }
+
+    // 3) Confirmación -> Control Producto OK
+    let mControlOk = {};
+    if (controlOk && controlOk.length){
+      const fCol = findCol(controlOk[0], ['numero de ficha'], 1);
+      const tCol = findCol(controlOk[0], ['marca temporal'], 0);
+      mControlOk = minByFicha(controlOk, fCol, tCol);
+    }
+    const confirmToControlOkPairs = [];
+    Object.keys(mConfirm).forEach(f => {
+      const d = daysBetween(mConfirm[f], mControlOk[f]);
+      if (d !== null) confirmToControlOkPairs.push({ ficha: f, dias: d, ts: mConfirm[f] });
+    });
+
+    window.__EXTRA_ALL__ = { armadoDurations, noConformeRows, confirmToControlOkPairs };
+
+    const fichas = new Set([
+      ...Object.keys(mIngreso), ...Object.keys(mDesarme), ...Object.keys(mConfirm),
+      ...Object.keys(mArmado), ...Object.keys(mPrueba), ...Object.keys(mEntrega)
+    ].map(Number));
+
+    DATASET_ALL = [...fichas].filter(f => f >= 9000 && f <= 20000).sort((a,b)=>a-b).map(f => {
+      const di = mIngreso[f], dd = mDesarme[f], dc = mConfirm[f], da = mArmado[f], dp = mPrueba[f], de = mEntrega[f];
+      const inf = infoOf(f);
+      return {
+        ficha: f, bomba: inf.bomba, cat: inf.cat, ingreso: di, desarme: dd, confirm: dc, armado: da, prueba: dp, entrega: de,
+        d_ing_des: daysBetween(di,dd),
+        d_des_con: daysBetween(dd,dc),
+        d_con_arm: daysBetween(dc,da),
+        d_arm_pru: daysBetween(da,dp),
+        d_pru_ent: daysBetween(dp,de),
+        d_total:   daysBetween(di,de),
+      };
+    });
+
+    populateMonthOptions();
+    populateDimOptions();
+    applyFilter();
+
+    const now = new Date();
+    document.getElementById('lastUpdate').textContent = 'Última lectura: ' + now.toLocaleTimeString('es-AR');
+    if (sheetsLoaded < 6){
+      setStatus('stale', `Se leyeron ${sheetsLoaded}/6 hojas. Revisá los nombres de pestaña en "⚙ Ver / ajustar hojas".`);
+    } else {
+      setStatus('ok', 'Datos al día');
+    }
+  } catch(err){
+    console.error(err);
+    setStatus('error', 'Error al leer la planilla. Reintentando en el próximo ciclo.');
+  }
+}
+
+function setStatus(kind, msg){
+  const dot = document.getElementById('statusDot');
+  const txt = document.getElementById('statusText');
+  dot.className = 'dot' + (kind==='error' ? ' err' : kind==='stale' ? ' stale' : '');
+  if (kind==='loading') txt.textContent = 'Actualizando…';
+  else txt.textContent = msg || 'Datos al día';
+}
+
+function avg(arr){ const v = arr.filter(x=>x!==null && x!==undefined && !isNaN(x)); return v.length ? v.reduce((a,b)=>a+b,0)/v.length : null; }
+function median(arr){
+  const v = arr.filter(x=>x!==null && x!==undefined && !isNaN(x)).sort((a,b)=>a-b);
+  if (!v.length) return null;
+  const mid = Math.floor(v.length/2);
+  return v.length%2 ? v[mid] : (v[mid-1]+v[mid])/2;
+}
+function percentile(sorted, p){
+  if (!sorted.length) return null;
+  const idx = (sorted.length-1) * p;
+  const lo = Math.floor(idx), hi = Math.ceil(idx);
+  if (lo===hi) return sorted[lo];
+  return sorted[lo] + (sorted[hi]-sorted[lo]) * (idx-lo);
+}
+// Separa valores "normales" de atípicos usando el método de rango intercuartil (IQR).
+// Recibe pares {id, value} (id = N° de ficha u operario, para poder señalar cuál es el atípico)
+// y devuelve { clean: [...pares sin atípicos], outliers: [...pares atípicos], upperBound }
+function splitOutliers(pairs){
+  const valid = pairs.filter(p => p.value!==null && p.value!==undefined && !isNaN(p.value));
+  if (valid.length < 5){
+    // con pocos datos el IQR no es confiable — no se separa nada
+    return { clean: valid, outliers: [], upperBound: null };
+  }
+  const sorted = valid.map(p=>p.value).slice().sort((a,b)=>a-b);
+  const q1 = percentile(sorted, 0.25), q3 = percentile(sorted, 0.75);
+  const iqr = q3 - q1;
+  const upperBound = q3 + 1.5*iqr;
+  const clean = valid.filter(p => p.value <= upperBound);
+  const outliers = valid.filter(p => p.value > upperBound);
+  return { clean, outliers, upperBound };
+}
+
+const STAGE_DEFS = [
+  {key:'d_ing_des', label:'Ingreso → Desarme'},
+  {key:'d_des_con', label:'Desarme → Confirmación'},
+  {key:'d_con_arm', label:'Confirmación → Armado'},
+  {key:'d_arm_pru', label:'Armado → Prueba OK'},
+  {key:'d_pru_ent', label:'Prueba OK → Entrega'},
+  {key:'d_total',   label:'TOTAL Ingreso → Entrega', total:true},
+];
+
+function renderKPIs(){
+  const grid = document.getElementById('kpiGrid');
+  grid.innerHTML = '';
+  const allOutliers = []; // para la tabla de "valores atípicos" global
+  STAGE_DEFS.forEach(sd => {
+    const pairs = DATASET.map(d => ({ id: d.ficha, value: d[sd.key] }));
+    const { clean, outliers } = splitOutliers(pairs);
+    const cleanVals = clean.map(p=>p.value);
+    const a = avg(cleanVals), m = median(cleanVals), n = cleanVals.length;
+    outliers.forEach(o => allOutliers.push({ etapa: sd.label, ficha: o.id, dias: o.value }));
+
+    const div = document.createElement('div');
+    div.className = 'kpi' + (sd.total ? ' total' : '');
+    const outlierNote = outliers.length
+      ? `<div class="sub" style="color:var(--warn);font-weight:600;">⚠ ${outliers.length} atípico${outliers.length>1?'s':''} excluido${outliers.length>1?'s':''}</div>`
+      : '';
+    div.innerHTML = `<div class="lab">${sd.label}</div>
+      <div class="val">${a===null?'s/d':a.toFixed(1)+'d'}</div>
+      <div class="sub">Mediana ${fmtDays(m)} d · N=${n}</div>
+      ${outlierNote}`;
+    grid.appendChild(div);
+  });
+  renderOutlierTable(allOutliers);
+}
+
+function renderOutlierTable(allOutliers){
+  const box = document.getElementById('outlierBox');
+  if (!box) return;
+  if (!allOutliers.length){
+    box.innerHTML = '<p class="desc" style="margin:0;">No se detectaron valores atípicos en este período (todos los tiempos están dentro de un rango esperado).</p>';
+    return;
+  }
+  allOutliers.sort((a,b) => b.dias - a.dias);
+  const rows = allOutliers.map(o =>
+    `<tr><td><b>${o.ficha}</b></td><td>${esc(o.etapa)}</td><td><span class="badge bad">${fmtDays(o.dias)} d</span></td></tr>`
+  ).join('');
+  box.innerHTML = `
+    <p class="desc" style="margin:0 0 10px;">
+      Estos casos quedaron <b>fuera del cálculo de promedio</b> de arriba porque su tiempo es muchísimo más alto que
+      el resto (se usó el método de rango intercuartil). Convendría revisarlos manualmente.
+    </p>
+    <div class="table-scroll" style="max-height:260px;">
+      <table>
+        <thead><tr><th>N° Ficha</th><th>Etapa</th><th>Días</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+}
+
+function renderCharts(){
+  // Bar: promedio por etapa (sin atípicos, igual que las tarjetas KPI)
+  const ctxBar = document.getElementById('barStages').getContext('2d');
+  const barData = STAGE_DEFS.map(sd => {
+    const pairs = DATASET.map(d => ({ id: d.ficha, value: d[sd.key] }));
+    return avg(splitOutliers(pairs).clean.map(p=>p.value));
+  });
+  if (charts.bar) charts.bar.destroy();
+  charts.bar = new Chart(ctxBar, {
+    type:'bar',
+    data:{ labels: STAGE_DEFS.map(s=>s.label), datasets:[{
+      data: barData, backgroundColor: STAGE_DEFS.map(s=>s.total?'#D98A2B':'#2E75B6'), borderRadius:5
+    }]},
+    options:{ plugins:{legend:{display:false}}, scales:{ y:{ title:{display:true,text:'Días'} } } }
+  });
+
+  // Donut: distribución tiempo total
+  const totals = DATASET.map(d=>d.d_total).filter(x=>x!==null);
+  const buckets = [ [0,5,'0–5 días'], [5,15,'5–15 días'], [15,30,'15–30 días'], [30,60,'30–60 días'], [60,Infinity,'+60 días'] ];
+  const counts = buckets.map(([lo,hi]) => totals.filter(t=>t>=lo && t<hi).length);
+  const ctxDonut = document.getElementById('donutTotal').getContext('2d');
+  if (charts.donut) charts.donut.destroy();
+  charts.donut = new Chart(ctxDonut, {
+    type:'doughnut',
+    data:{ labels: buckets.map(b=>b[2]), datasets:[{ data: counts,
+      backgroundColor:['#5B9BD5','#2E75B6','#173A63','#D98A2B','#C0392B'] }] },
+    options:{ plugins:{legend:{position:'bottom', labels:{boxWidth:12,font:{size:10}}}} }
+  });
+
+  // Line+bar: tendencia mensual (promedio TOTAL sin atípicos, calculados globalmente y aplicados por mes)
+  const totalPairsGlobal = DATASET.map(d => ({ id: d.ficha, value: d.d_total }));
+  const { upperBound: totalUpperBound } = splitOutliers(totalPairsGlobal);
+  const byMonth = {};
+  DATASET.forEach(d => {
+    if (!d.ingreso) return;
+    const key = d.ingreso.getFullYear() + '-' + String(d.ingreso.getMonth()+1).padStart(2,'0');
+    byMonth[key] = byMonth[key] || {count:0, totals:[]};
+    byMonth[key].count++;
+    if (d.d_total !== null && (totalUpperBound===null || d.d_total <= totalUpperBound)) byMonth[key].totals.push(d.d_total);
+  });
+  const months = Object.keys(byMonth).sort();
+  const counts2 = months.map(m => byMonth[m].count);
+  const avgs2 = months.map(m => avg(byMonth[m].totals));
+
+  const ctxLine = document.getElementById('lineMonthly').getContext('2d');
+  if (charts.line) charts.line.destroy();
+  charts.line = new Chart(ctxLine, {
+    data:{ labels: months, datasets:[
+      { type:'bar', label:'Fichas ingresadas', data: counts2, backgroundColor:'#B9D3EA', yAxisID:'y1', order:2 },
+      { type:'line', label:'Días TOTAL promedio (sin atípicos)', data: avgs2, borderColor:'#D98A2B', backgroundColor:'#D98A2B', tension:.3, yAxisID:'y2', order:1 }
+    ]},
+    options:{
+      interaction:{mode:'index', intersect:false},
+      scales:{
+        y1:{ position:'left', title:{display:true,text:'Fichas'} },
+        y2:{ position:'right', title:{display:true,text:'Días promedio'}, grid:{drawOnChartArea:false} }
+      }
+    }
+  });
+}
+
+function renderDiag(diag){
+  const box = document.getElementById('diagBox');
+  if (!box) return;
+  const rows = Object.entries(diag).map(([k,v]) => {
+    const cols = v.columnas.length ? v.columnas.map(c=>`<code>${c}</code>`).join(', ') : '<i>sin columnas</i>';
+    return `<div style="margin-bottom:6px;"><b>${k}</b>: ${v.filas} filas — ${cols}</div>`;
+  }).join('');
+  box.innerHTML = '<b style="color:var(--navy);">Diagnóstico (última lectura)</b><div style="margin-top:6px;">' + rows + '</div>';
+}
+
+function renderEmpty(){
+  document.getElementById('kpiGrid').innerHTML = '<div class="empty" style="grid-column:1/-1;">Sin datos disponibles todavía.</div>';
+  document.getElementById('tableBody').innerHTML = '<tr><td colspan="10" class="empty">Sin datos</td></tr>';
+  const extraGrid = document.getElementById('extraKpiGrid');
+  if (extraGrid) extraGrid.innerHTML = '';
+}
+
+function esc(s){
+  return String(s==null?'':s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+}
+
+function renderExtraIndicators(){
+  const extra = window.__EXTRA__ || {};
+  const armadoDurations = extra.armadoDurations || []; // [{ficha, operario, dias}]
+  const noConformeRows = extra.noConformeRows || [];
+  const motivoCounts = extra.motivoCounts || {};
+  const confirmToControlOkPairs = extra.confirmToControlOkPairs || []; // [{ficha, dias}]
+
+  // Separar atípicos de "Inicio Armado → Registro Armado" (global) y de "Confirmación → Control OK"
+  const armadoSplit = splitOutliers(armadoDurations.map(a => ({ id:a.ficha, value:a.dias, operario:a.operario })));
+  const confCtrlSplit = splitOutliers(confirmToControlOkPairs.map(p => ({ id:p.ficha, value:p.dias })));
+
+  const extraOutliers = [
+    ...armadoSplit.outliers.map(o => ({ etapa:'Inicio Armado → Registro Armado', ficha:o.id, dias:o.value })),
+    ...confCtrlSplit.outliers.map(o => ({ etapa:'Confirmación → Control OK', ficha:o.id, dias:o.value })),
+  ];
+  renderExtraOutlierTable(extraOutliers);
+
+  // KPI cards (promedios calculados SOLO sobre los valores "limpios")
+  const grid = document.getElementById('extraKpiGrid');
+  const cleanArmado = armadoSplit.clean.map(p=>p.value);
+  const cleanConfCtrl = confCtrlSplit.clean.map(p=>p.value);
+  const avgArmado = avg(cleanArmado), medArmado = median(cleanArmado);
+  const avgConfCtrl = avg(cleanConfCtrl), medConfCtrl = median(cleanConfCtrl);
+  const armadoWarn = armadoSplit.outliers.length
+    ? `<div class="sub" style="color:var(--warn);font-weight:600;">⚠ ${armadoSplit.outliers.length} atípico(s) excluido(s)</div>` : '';
+  const confCtrlWarn = confCtrlSplit.outliers.length
+    ? `<div class="sub" style="color:var(--warn);font-weight:600;">⚠ ${confCtrlSplit.outliers.length} atípico(s) excluido(s)</div>` : '';
+
+  grid.innerHTML = `
+    <div class="kpi">
+      <div class="lab">Inicio Armado → Registro Armado</div>
+      <div class="val">${avgArmado===null?'s/d':fmtHM(avgArmado)}</div>
+      <div class="sub">Mediana ${fmtHM(medArmado)} · N=${cleanArmado.length}</div>
+      ${armadoWarn}
+    </div>
+    <div class="kpi">
+      <div class="lab">Confirmación → Control OK</div>
+      <div class="val">${avgConfCtrl===null?'s/d':fmtHM(avgConfCtrl)}</div>
+      <div class="sub">Mediana ${fmtHM(medConfCtrl)} · N=${cleanConfCtrl.length}</div>
+      ${confCtrlWarn}
+    </div>
+    <div class="kpi total">
+      <div class="lab">Pruebas No Conformes (total)</div>
+      <div class="val">${noConformeRows.length}</div>
+      <div class="sub">${Object.keys(motivoCounts).length} motivos distintos</div>
+    </div>
+  `;
+
+  // Tabla: armado por operario (también sobre valores limpios, agrupados de nuevo por persona)
+  const opBody = document.getElementById('armadoPorOperarioBody');
+  const porOperarioClean = {};
+  armadoSplit.clean.forEach(p => {
+    porOperarioClean[p.operario] = porOperarioClean[p.operario] || [];
+    porOperarioClean[p.operario].push(p.value);
+  });
+  const opRows = Object.entries(porOperarioClean)
+    .map(([op, arr]) => ({ op, avg: avg(arr), med: median(arr), n: arr.length }))
+    .sort((a,b) => (b.avg||0) - (a.avg||0));
+  opBody.innerHTML = opRows.length ? opRows.map(r =>
+    `<tr><td>${esc(r.op)}</td><td>${fmtHM(r.avg)}</td><td>${fmtHM(r.med)}</td><td>${r.n}</td></tr>`
+  ).join('') : '<tr><td colspan="4" class="empty">Sin datos</td></tr>';
+
+  // Tabla: motivos de no conformidad
+  const motBody = document.getElementById('motivoNCBody');
+  const motRows = Object.entries(motivoCounts).sort((a,b) => b[1]-a[1]);
+  motBody.innerHTML = motRows.length ? motRows.map(([mot,count]) =>
+    `<tr><td>${esc(mot)}</td><td><b>${count}</b></td></tr>`
+  ).join('') : '<tr><td colspan="2" class="empty">Sin datos</td></tr>';
+
+  // Detalle de no conformidades (más recientes primero)
+  const detBody = document.getElementById('detalleNCBody');
+  const detRows = noConformeRows.slice().sort((a,b) => (b.ts||0) - (a.ts||0)).slice(0,200);
+  detBody.innerHTML = detRows.length ? detRows.map(r =>
+    `<tr><td><b>${r.ficha}</b></td><td>${esc(r.cliente)}</td><td>${esc(r.componente)}</td><td>${esc(r.motivo)}</td></tr>`
+  ).join('') : '<tr><td colspan="4" class="empty">Sin datos</td></tr>';
+}
+
+function renderExtraOutlierTable(list){
+  const box = document.getElementById('extraOutlierBox');
+  if (!box) return;
+  if (!list.length){
+    box.innerHTML = '';
+    return;
+  }
+  list.sort((a,b) => b.dias - a.dias);
+  const rows = list.map(o =>
+    `<tr><td><b>${o.ficha}</b></td><td>${esc(o.etapa)}</td><td><span class="badge bad">${fmtHM(o.dias)}</span></td></tr>`
+  ).join('');
+  box.innerHTML = `
+    <h2 style="font-size:.92rem;margin-top:20px;">⚠ Atípicos excluidos de estos indicadores</h2>
+    <div class="table-scroll" style="max-height:220px;">
+      <table>
+        <thead><tr><th>N° Ficha</th><th>Indicador</th><th>Duración</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+}
+
+function renderTable(){
+  const q = (document.getElementById('searchBox').value||'').trim();
+  const tbody = document.getElementById('tableBody');
+  let rows = DATASET;
+  if (q){ const qu = q.toUpperCase(); rows = rows.filter(d => String(d.ficha).includes(q) || d.bomba.includes(qu)); }
+  document.getElementById('rowCount').textContent = rows.length + ' fichas';
+  const frag = document.createDocumentFragment();
+  rows.slice().reverse().slice(0,300).forEach(d => {
+    const tr = document.createElement('tr');
+    const badge = d.d_total===null ? '' :
+      d.d_total<=15 ? `<span class="badge good">${fmtDays(d.d_total)}</span>` :
+      d.d_total<=45 ? `<span class="badge warn">${fmtDays(d.d_total)}</span>` :
+      `<span class="badge bad">${fmtDays(d.d_total)}</span>`;
+    tr.innerHTML = `<td><b>${d.ficha}</b></td><td>${esc(d.bomba)}</td><td>${catBadge(d.cat)}</td><td>${fmtDate(d.ingreso)}</td><td>${fmtDate(d.desarme)}</td>
+      <td>${fmtDate(d.confirm)}</td><td>${fmtDate(d.armado)}</td><td>${fmtDate(d.prueba)}</td><td>${fmtDate(d.entrega)}</td>
+      <td>${badge}</td>`;
+    frag.appendChild(tr);
+  });
+  tbody.innerHTML = '';
+  tbody.appendChild(frag);
+}
+
+// ---------- Clasificación: diagnóstico, estado del taller y agrupaciones ----------
+function catBadge(c){
+  if (!c || c === SIN) return '<span style="color:var(--ink-soft);">—</span>';
+  const cls = ['A','B','C'].includes(c) ? c : '';
+  return `<span class="cat-badge ${cls}">${esc(c)}</span>`;
+}
+function renderColsDiag(colsUsed){
+  const box = document.getElementById('diagBox');
+  if (!box) return;
+  const rows = Object.entries(colsUsed).map(([k,v]) =>
+    `<div><b>${k}</b>: bomba → ${v.bomba?`<code>${esc(v.bomba)}</code>`:'<i>no encontrada</i>'} · categoría → ${v.cat?`<code>${esc(v.cat)}</code>`:'<i>no encontrada</i>'}</div>`
+  ).join('');
+  box.insertAdjacentHTML('beforeend', '<div style="margin-top:10px;"><b style="color:var(--navy);">Columnas de clasificación detectadas</b>' + rows + '</div>');
+}
+
+const WAIT_LABELS = ['Esperando desarme','Esperando confirmación','Esperando armado','Esperando prueba OK','Esperando entrega'];
+function waitingStage(d){
+  const seq = [d.ingreso, d.desarme, d.confirm, d.armado, d.prueba];
+  let last = -1; seq.forEach((v,i) => { if (v) last = i; });
+  return last < 0 ? null : WAIT_LABELS[last];
+}
+function openFichas(){
+  const now = new Date();
+  return DATASET.filter(d => d.ingreso && !d.entrega)
+    .map(d => ({ ...d, edad: (now - d.ingreso)/86400000, esperando: waitingStage(d) }))
+    .filter(d => d.edad >= 0 && d.edad <= 365); // más de un año sin entrega: se asume registro faltante
+}
+
+function renderWIP(){
+  const open = openFichas();
+  const entregadas = DATASET.filter(d => d.d_total !== null);
+  const enPlazo = entregadas.filter(d => d.d_total <= 15).length;
+  const ncFichas = new Set((window.__EXTRA__?.noConformeRows || []).map(r => String(r.ficha)));
+  const probadas = DATASET.filter(d => d.prueba || ncFichas.has(String(d.ficha)));
+  const conNC = probadas.filter(d => ncFichas.has(String(d.ficha))).length;
+  const edadProm = avg(open.map(o => o.edad));
+  const viejas = open.filter(o => o.edad > 30).length;
+  const pct = (a,b) => b ? (100*a/b).toFixed(0)+'%' : 's/d';
+
+  const cards = [
+    { lab:'Fichas abiertas', val: open.length, sub:'Con ingreso y sin entrega', total:true },
+    { lab:'Antigüedad prom. abiertas', val: edadProm===null?'s/d':edadProm.toFixed(1)+'d', sub:`Mediana ${fmtDays(median(open.map(o=>o.edad)))} d` },
+    { lab:'Abiertas hace +30 días', val: viejas, sub: pct(viejas, open.length)+' de las abiertas' },
+    { lab:'Entregadas', val: entregadas.length, sub:`${DATASET.length} fichas en el período` },
+    { lab:'Entregadas en ≤15 días', val: pct(enPlazo, entregadas.length), sub:`${enPlazo} de ${entregadas.length}` },
+    { lab:'Tasa de retrabajo', val: pct(conNC, probadas.length), sub:`${conNC} fichas con prueba no conforme` },
+  ];
+  document.getElementById('wipKpiGrid').innerHTML = cards.map(c =>
+    `<div class="kpi${c.total?' total':''}"><div class="lab">${c.lab}</div><div class="val">${c.val}</div><div class="sub">${c.sub}</div></div>`
+  ).join('');
+
+  const counts = WAIT_LABELS.map(l => open.filter(o => o.esperando === l).length);
+  if (charts.wip) charts.wip.destroy();
+  charts.wip = new Chart(document.getElementById('barWip').getContext('2d'), {
+    type:'bar',
+    data:{ labels: WAIT_LABELS, datasets:[{ data: counts, backgroundColor:'#2E75B6', borderRadius:5 }] },
+    options:{ indexAxis:'y', maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{ x:{ title:{display:true,text:'Fichas'}, ticks:{precision:0} } } }
+  });
+
+  const old = open.slice().sort((a,b) => b.edad - a.edad).slice(0,50);
+  document.getElementById('wipOldBody').innerHTML = old.length ? old.map(o =>
+    `<tr><td><b>${o.ficha}</b></td><td>${esc(o.bomba)}</td><td>${catBadge(o.cat)}</td><td>${esc(o.esperando||'—')}</td>
+     <td><span class="badge ${o.edad>45?'bad':o.edad>15?'warn':'good'}">${o.edad.toFixed(0)}</span></td></tr>`
+  ).join('') : '<tr><td colspan="5" class="empty">No hay fichas abiertas</td></tr>';
+}
+
+const STAGE_ONLY = STAGE_DEFS.filter(s => !s.total);
+const STAGE_COLORS = ['#5B9BD5','#2E75B6','#173A63','#D98A2B','#2F8F5B'];
+
+function groupStats(key){
+  const ncFichas = new Set((window.__EXTRA__?.noConformeRows || []).map(r => String(r.ficha)));
+  const now = new Date();
+  const groups = {};
+  DATASET.forEach(d => { (groups[d[key]] = groups[d[key]] || []).push(d); });
+  return Object.entries(groups).map(([name, rows]) => {
+    const cleanAvg = k => avg(splitOutliers(rows.map(d => ({ id:d.ficha, value:d[k] }))).clean.map(p=>p.value));
+    const totals = splitOutliers(rows.map(d => ({ id:d.ficha, value:d.d_total }))).clean.map(p=>p.value);
+    const stages = STAGE_ONLY.map(s => ({ label: s.label, v: cleanAvg(s.key) }));
+    const slow = stages.filter(s => s.v !== null).sort((a,b) => b.v - a.v)[0];
+    const entregadas = rows.filter(d => d.d_total !== null);
+    return {
+      name, n: rows.length,
+      entregadas: entregadas.length,
+      abiertas: rows.filter(d => d.ingreso && !d.entrega && (now - d.ingreso)/86400000 <= 365).length,
+      avgTotal: avg(totals), medTotal: median(totals),
+      enPlazo: entregadas.length ? entregadas.filter(d => d.d_total <= 15).length / entregadas.length : null,
+      conNC: rows.filter(d => ncFichas.has(String(d.ficha))).length,
+      stages, slow,
+    };
+  });
+}
+
+function groupRowsHTML(list, isCat){
+  return list.length ? list.map(g => `<tr>
+    <td>${isCat ? catBadge(g.name) + (g.name===SIN?' Sin dato':'') : '<b>'+esc(g.name)+'</b>'}</td>
+    <td>${g.n}</td><td>${g.entregadas}</td><td>${g.abiertas}</td>
+    <td>${g.avgTotal===null?'—':fmtDays(g.avgTotal)+' d'}</td><td>${g.medTotal===null?'—':fmtDays(g.medTotal)+' d'}</td>
+    <td>${g.enPlazo===null?'—':(g.enPlazo*100).toFixed(0)+'%'}</td>
+    <td>${g.conNC ? `<span class="badge warn">${g.conNC}</span>` : '0'}</td>
+    <td style="font-size:.72rem;">${g.slow ? esc(g.slow.label)+' ('+fmtDays(g.slow.v)+' d)' : '—'}</td></tr>`
+  ).join('') : '<tr><td colspan="9" class="empty">Sin datos</td></tr>';
+}
+
+function stackedChart(chartKey, canvasId, list, horizontal){
+  if (charts[chartKey]) charts[chartKey].destroy();
+  charts[chartKey] = new Chart(document.getElementById(canvasId).getContext('2d'), {
+    type:'bar',
+    data:{ labels: list.map(g => g.name + ` (${g.n})`),
+      datasets: STAGE_ONLY.map((s,i) => ({ label: s.label, data: list.map(g => g.stages[i].v), backgroundColor: STAGE_COLORS[i] })) },
+    options:{ indexAxis: horizontal ? 'y' : 'x', maintainAspectRatio:false,
+      plugins:{ legend:{ position:'bottom', labels:{boxWidth:12,font:{size:10}} },
+        tooltip:{ callbacks:{ label: c => `${c.dataset.label}: ${c.raw===null?'s/d':c.raw.toFixed(1)+' d'}` } } },
+      scales:{ x:{ stacked:true }, y:{ stacked:true } } }
+  });
+  const axis = horizontal ? 'x' : 'y';
+  charts[chartKey].options.scales[axis].title = { display:true, text:'Días promedio acumulados' };
+  charts[chartKey].update();
+}
+
+function renderGroups(){
+  // Por tipo de bomba
+  const bombas = groupStats('bomba').sort((a,b) => b.n - a.n);
+  document.getElementById('bombaBody').innerHTML = groupRowsHTML(bombas, false);
+  stackedChart('bomba', 'barBomba', bombas.filter(g => g.name !== SIN).slice(0,12), true);
+
+  // Por categoría
+  const cats = groupStats('cat').sort((a,b) => (a.name===SIN)-(b.name===SIN) || a.name.localeCompare(b.name));
+  document.getElementById('catBody').innerHTML = groupRowsHTML(cats, true);
+  stackedChart('cat', 'barCat', cats.filter(g => g.name !== SIN), false);
+  const catColor = n => ({A:'#2E75B6',B:'#D98A2B',C:'#7A4FA0'})[n] || '#9AA8B5';
+  if (charts.donutCat) charts.donutCat.destroy();
+  charts.donutCat = new Chart(document.getElementById('donutCat').getContext('2d'), {
+    type:'doughnut',
+    data:{ labels: cats.map(g => 'Cat. ' + g.name), datasets:[{ data: cats.map(g => g.n), backgroundColor: cats.map(g => catColor(g.name)) }] },
+    options:{ maintainAspectRatio:false, plugins:{ legend:{position:'bottom', labels:{boxWidth:12,font:{size:10}}},
+      title:{ display:true, text:'Fichas por categoría' } } }
+  });
+
+  // Cruce bomba × categoría
+  const catNames = cats.map(g => g.name);
+  const topBombas = bombas.slice(0,25).map(g => g.name);
+  const cell = {};
+  DATASET.forEach(d => {
+    const k = d.bomba + '||' + d.cat;
+    (cell[k] = cell[k] || []).push(d.d_total);
+  });
+  const head = `<thead><tr><th>Bomba \\ Cat.</th>${catNames.map(c => `<th>${esc(c)}</th>`).join('')}</tr></thead>`;
+  const body = topBombas.map(b => `<tr><td><b>${esc(b)}</b></td>${catNames.map(c => {
+    const arr = cell[b+'||'+c]; if (!arr) return '<td style="color:#B0BCC7;">—</td>';
+    const a = avg(arr);
+    return `<td>${arr.length}${a===null?'':` <span style="color:var(--ink-soft);">(${a.toFixed(1)} d)</span>`}</td>`;
+  }).join('')}</tr>`).join('');
+  document.getElementById('crossTable').innerHTML = head + '<tbody>' + (body || '<tr><td class="empty">Sin datos</td></tr>') + '</tbody>';
+}
+
+// ---------- Init ----------
+(async function init(){
+  await loadAll();
+  setInterval(() => loadAll(), REFRESH_MS);
+})();
+</script>
+</body>
+</html>
